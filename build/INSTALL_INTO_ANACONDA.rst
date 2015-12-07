@@ -127,9 +127,7 @@ program.
 
 To test your installation, type
 
-``
-$HOME/sire.app/bin/sire_test
-``
+``$HOME/sire.app/bin/sire_test``
 
 This might require installing nose tests before hand:
 
