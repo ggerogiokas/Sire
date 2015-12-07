@@ -36,9 +36,10 @@ from Sire.Config import *
 from Sire.Analysis import *
 from Sire.Tools.DCDFile import *
 from Sire.Tools import Parameter, resolveParameters
+from Sire import try_import
 import Sire.Stream
 import time
-import numpy as np
+np = try_import("numpy")
 
 
 ####################################################################################################
@@ -666,7 +667,7 @@ def freezeResidues(system):
 
 def repartitionMasses(system, hmassfactor=4.0):
     """
-    Increase the mass of hydrogen atoms to hmass times * amu, and subtract the mass 
+    Increase the mass of hydrogen atoms to hmass times * amu, and subtract the mass
 increase from the heavy atom the hydrogen is bonded to.
     """
 
@@ -1454,7 +1455,7 @@ def runFreeNrg():
         outfile.write(bytes("#Alchemical array is\t\t "+ str(lambda_array.val) +"\n", "UTF-8"))
         outfile.write(bytes("#Generating temperature is \t"+str(temperature.val)+"\n", "UTF-8"))
         outfile.write(bytes("#Energy was saved every "+str(energy_frequency.val)+ " steps \n#\n#\n", "UTF-8"))
-        outfile.write(bytes("# %8s %25s %25s %25s %25s %25s" % ("[step]", "[potential kcal/mol]", "[gradient kcal/mol]",
+        outfile.write(bytes("# %8s %25s %25s %25s %25s %25s" % ("[step]", "[potential kcal/mol]", "[gradient]",
         "[forward Metropolis]", "[backward Metropolis]", "[u_kl]\n"),
                             "UTF-8"))
 
@@ -1551,7 +1552,7 @@ def runFreeNrg():
         mean_gradient = np.average(gradients)
         outgradients.write("%5d %20.10f\n" % (i, mean_gradient))
         for gradient in gradients:
-            grads[lambda_val.val].accumulate(gradients[i-1])
+            grads[lambda_val.val].accumulate(gradients[i-1]/beta)
     s2 = timer.elapsed() / 1000.
     outfile.close()
     print("Simulation took %d s " % ( s2 - s1))
