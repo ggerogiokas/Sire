@@ -66,9 +66,9 @@ This will take some time. Have a coffee.
 Once the cmake command has finished, you can now compile the corelib
 using the command
 
-``
-nice make -j 8
-``
+
+``nice make -j 8``
+
 
 (-j says how parallel you want to be. If you have 16 cores on your node,
  you may want to be more parallel, e.g. -j 16. Equally, if you only have
@@ -86,19 +86,17 @@ make -j 8 install/strip
 Once this has finished, you should find that the sire libraries are
 visible in $HOME/sire.app/pkgs/sire-0.0.1/lib, e.g.
 
-``
-ls $HOME/sire.app/pkgs/sire-0.0.1/lib/libSireMol*
-``
+``ls $HOME/sire.app/pkgs/sire-0.0.1/lib/libSireMol*``
 
 should show all of the SireMol libraries.
 
 (4) Now compile the python wrappers, also telling it to install
     into the anaconda directory
 
-``
-cd ../wrapper
-cmake -D ANACONDA_BUILD=on -D ANACONDA_BASE=$HOME/sire.app $HOME/Sire/wrapper
-``
+
+``cd ../wrapper``
+
+``cmake -D ANACONDA_BUILD=on -D ANACONDA_BASE=$HOME/sire.app $HOME/Sire/wrapper``
 
 (again, this assumes that you have put anaconda into $HOME/sire.app
  and that the Sire source is in $HOME/Sire)
@@ -108,25 +106,21 @@ directory. Again, this may take a while...
 
 Once the cmake command has finished, you compile the wrappers using
 
-``
-make -j 8
-``
+
+``make -j 8``
+
 
 Again, this will take a while to complete...
 
 Once the compilation has finished, install using
 
-``
-make -j 8 install/strip
-``
+``make -j 8 install/strip``
 
 Once this has finished, you should find that you have a sire_python
 (and all other Sire executables) in $HOME/sire.app/bin. Try to run
 one of the Sire programs, e.g.
 
-``
-$HOME/sire.app/bin/waterswap
-``
+``$HOME/sire.app/bin/waterswap``
 
 You should see some instructions on how to use the waterswap
 program.
@@ -139,8 +133,6 @@ $HOME/sire.app/bin/sire_test
 
 This might require installing nose tests before hand:
 
-``
-$HOME/sire.app/bin/conda install nose
-``
+``$HOME/sire.app/bin/conda install nose``
 
 Hopefully, all of the tests will pass...
