@@ -218,13 +218,73 @@ def analyse_range(range):
     return range_start, range_end
 
 
-def do_mbar_analysis(input_file):
+def do_mbar_analysis(input_file, FILE):
     mbar_results = None
     print ("this has not been implemented yet.")
     return mbar_results
 
-def do_sire_analysis(input_file):
-    print ("this has not been implemented yet.")
+def do_sire_analysis(input_file, FILE):
+    num_inputfiles = len(input_file)
+
+    # Only one input file provided, assumes it contains freenrgs
+    freenrgs = Sire.Stream.load(input_file[0])
+
+    results = []
+
+    try:
+        results.append(process_free_energies(freenrgs, FILE, range_start, range_end))
+    except:
+        for freenrg in freenrgs:
+            results.append(process_free_energies(freenrg, FILE, range_start, range_end))
+
+    FILE.write("# Convergence\n")
+    FILE.write("# Iteration \n")
+    for result in results:
+        FILE.write("# %s " % result[0])
+    FILE.write("\n")
+
+    i = 1
+    has_value = True
+    while has_value:
+        values = []
+        has_value = False
+        for result in results:
+            if i in result[1]:
+                has_value = True
+                values.append(result[1][i])
+            else:
+                values.append(0.0)
+
+        if has_value:
+            FILE.write("%s " % i)
+
+            for value in values:
+                FILE.write("%s " % value)
+
+            FILE.write("\n")
+            i += 1
+
+    FILE.write("# PMFs\n")
+
+    for result in results:
+        FILE.write("# %s\n" % result[0])
+        FILE.write("# Lambda  PMF  Maximum  Minimum \n")
+
+        for value in result[2].values():
+            FILE.write(
+                "%s  %s  %s  %s\n" % (value.x(), value.y(), value.y() + value.yMaxError(), value.y() - value.yMaxError()))
+
+    FILE.write("# Free energies \n")
+
+    for result in results:
+        FILE.write("# %s = %s +/- %s kcal mol-1" % (result[0], result[2].deltaG(), result[2].values()[-1].yMaxError()))
+
+        try:
+            FILE.write(" (quadrature = %s kcal mol-1)" % result[2].quadrature())
+        except:
+            pass
+
+        FILE.write("#\n")
 
 def convert_gradient_files(gradient_files):
     # Multiple input files provided. Assume we have several gradients files that must be combined
@@ -304,7 +364,6 @@ if __name__ == '__main__':
     else:
         percent = 60.0
 
-
     if not input_file and not gradient_files and not sim_files and not args.lmabda_input:
         parser.print_help()
         print("\nPlease supply the name of the .s3 file(s) containing the free energies/gradients to be analysed, or a list of directories"
@@ -322,77 +381,22 @@ if __name__ == '__main__':
 
     FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % input_file)
 
+    #We have a single or set of free energy files and do a free energy analysis useing Sire.Analysis
+    if input_file:
+        do_sire_analysis(input_file, FILE)
+
+    #We have a bunch of gradient files in binary stream format and create an free energy object file which is then Analysed with Sire.Analysis
     if gradient_files:
         input_file = convert_gradient_files(gradient_files)
-
-    if sim_files:
-        do_mbar_analysis()
-
-    num_inputfiles = len(input_file)
-
-    # Only one input file provided, assumes it contains freenrgs
-    freenrgs = Sire.Stream.load(input_file[0])
-
-    results = []
-
-
-
-    try:
-        results.append(process_free_energies(freenrgs, FILE, range_start, range_end))
-    except:
-        for freenrg in freenrgs:
-            results.append(process_free_energies(freenrg, FILE, range_start, range_end))
-
-    FILE.write("# Convergence\n")
-    FILE.write("# Iteration \n")
-    for result in results:
-        FILE.write("# %s " % result[0])
-    FILE.write("\n")
-
-    i = 1
-    has_value = True
-    while has_value:
-        values = []
-        has_value = False
-        for result in results:
-            if i in result[1]:
-                has_value = True
-                values.append(result[1][i])
-            else:
-                values.append(0.0)
-
-        if has_value:
-            FILE.write("%s " % i)
-
-            for value in values:
-                FILE.write("%s " % value)
-
-            FILE.write("\n")
-            i += 1
-
-    FILE.write("# PMFs\n")
-
-    for result in results:
-        FILE.write("# %s\n" % result[0])
-        FILE.write("# Lambda  PMF  Maximum  Minimum \n")
-
-        for value in result[2].values():
-            FILE.write(
-                "%s  %s  %s  %s\n" % (value.x(), value.y(), value.y() + value.yMaxError(), value.y() - value.yMaxError()))
-
-    FILE.write("# Free energies \n")
-
-    for result in results:
-        FILE.write("# %s = %s +/- %s kcal mol-1" % (result[0], result[2].deltaG(), result[2].values()[-1].yMaxError()))
-
-        try:
-            FILE.write(" (quadrature = %s kcal mol-1)" % result[2].quadrature())
-        except:
-            pass
-
-        FILE.write("#\n")
-
-    if gradient_files:
+        do_sire_analysis(input_file, FILE)
         cmd = "rm freenrgs.s3"
         os.system(cmd)
+
+    #We have a bunch of simfiles that are used for an MBAR analysis, but also produce output for TI, and BAR
+    if sim_files:
+        do_mbar_analysis(sim_files, FILE)
+
+    #Deal with lambda directory input, where no specific input files are supplied instead look for default input files in the given directories
+
+
 
