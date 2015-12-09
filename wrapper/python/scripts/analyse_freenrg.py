@@ -44,6 +44,7 @@ import os
 from Sire import try_import
 from Sire.Tools.FreeEnergyAnalysis import SubSample
 from Sire.Tools.FreeEnergyAnalysis import FreeEnergies
+from Sire.Tools.FreeEnergyAnalysis import SimfileParser
 np = try_import("numpy")
 
 
@@ -189,7 +190,7 @@ def parse_args():
     if must_exit:
         sys.exit(0)
 
-    return args
+    return args, parser
 
 def analyse_range(range):
     r""" Sets the range of data that should be analysed
@@ -203,8 +204,8 @@ def analyse_range(range):
         start integer for the range to be analysed
     range_end : int
         end integer for the range to be analysed
-
     """
+
     range_start = int(range[0])
     range_end = int(range[1])
     if range_end < 1:
@@ -218,24 +219,57 @@ def analyse_range(range):
     return range_start, range_end
 
 
-def do_mbar_analysis(input_file, FILE):
-    mbar_results = None
-    print ("this has not been implemented yet.")
-    return mbar_results
+def do_mbar_analysis(input_file, FILE, percent = 0, lam = None, T = None, subsample = True):
+    r""" do an MBAR analysis using the pymbar external library
+    Parameters
+    ----------
+    input_file : list(dtype, string)
+        ASCII type input files, e.g. simfile.dat containing information 
+    FILE : filehandle
+        file handle to the output file/std out given in the commandline arguments (-o)
+    lam : ndarray(dtype=double)
+        lambda array at which free energies should be evaluated, free energy differences are always computed between
+        lambda = 0.0 and lambda = 1.0.
+    T : double
+        temperatue at which the simualtion was simulated
+    percent : double
+        percentage of data that should be used for analysis. 
+        Default all data will initially used, but subsampled according to statistical inefficiency.
+    """
 
-def do_sire_analysis(input_file, FILE):
+    parser = SimfileParser(input_file, lam, T)
+    parser.load_data()
+    subsample_obj = SubSample(parser.grad_kn, parser.energies_kn, parser.u_kln, parser.N_k, percentage=percent, subsample=subsample)
+    subsample_obj.subsample_energies()
+    subsample_obj.subsample_gradients()
+
+    free_energy_obj = FreeEnergies(subsample_obj.u_kln, subsample_obj.N_k_energies, parser.lam, subsample_obj.gradients_kn)
+    free_energy_obj.run_mbar()
+    free_energy_obj.run_ti()
+    #ok, now we have all the objects we want, we need to write them to file. 
+
+def do_sire_analysis(input_file, FILE, range_start, range_end, percent):
+    r""" do sire analysis contains all the analysis script using Sire.Analysis for free energies
+    Parameter
+    ---------
+    input_file : list(dtype: string)
+        list of inputfile strings that should be read with Sire.Stream.load(), only Sire binary formats are allowed.
+    FILE : FILE
+        file handle to the output file/std out given in the commandline arguments
+    range_start : int
+    range_end : int
+    """
+
     num_inputfiles = len(input_file)
-
     # Only one input file provided, assumes it contains freenrgs
     freenrgs = Sire.Stream.load(input_file[0])
-
     results = []
 
     try:
-        results.append(process_free_energies(freenrgs, FILE, range_start, range_end))
+        results.append(process_free_energies(freenrgs, FILE, range_start, range_end, percent))
     except:
         for freenrg in freenrgs:
-            results.append(process_free_energies(freenrg, FILE, range_start, range_end))
+            results.append(process_free_energies(freenrg, FILE, range_start, range_end, percent))
 
     FILE.write("# Convergence\n")
     FILE.write("# Iteration \n")
@@ -285,13 +319,13 @@ def do_sire_analysis(input_file, FILE):
             pass
 
         FILE.write("#\n")
+    FILE.close()
 
 def convert_gradient_files(gradient_files):
     # Multiple input files provided. Assume we have several gradients files that must be combined
     grads = {}
     fwds_grads = {}
     bwds_grads = {}
-
     delta_lambda = None
 
 
@@ -301,10 +335,6 @@ def convert_gradient_files(gradient_files):
         analytic_data = grad.analyticData()
         fwds_data = grad.forwardsData()
         bwds_data = grad.backwardsData()
-
-        #print(analytic_data)
-        #print(fwds_data)
-        #print(bwds_data)
 
         if len(analytic_data) > 0:
             # analytic gradients
@@ -332,7 +362,7 @@ def convert_gradient_files(gradient_files):
 if __name__ == '__main__':
     #Here is the main body of the script
     #Let's check all the arguments properly and assign things according to the arguemnts
-    args = parse_args()
+    args, parser = parse_args()
     if args.input:
         input_file = args.input
     else:
@@ -383,12 +413,12 @@ if __name__ == '__main__':
 
     #We have a single or set of free energy files and do a free energy analysis useing Sire.Analysis
     if input_file:
-        do_sire_analysis(input_file, FILE)
+        do_sire_analysis(input_file, FILE, range_start, range_end)
 
     #We have a bunch of gradient files in binary stream format and create an free energy object file which is then Analysed with Sire.Analysis
     if gradient_files:
         input_file = convert_gradient_files(gradient_files)
-        do_sire_analysis(input_file, FILE)
+        do_sire_analysis(input_file, FILE, range_start, range_end)
         cmd = "rm freenrgs.s3"
         os.system(cmd)
 
