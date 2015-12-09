@@ -9,6 +9,7 @@
 
 from Sire import try_import
 from Sire import try_import_from
+import os
 np = try_import("numpy")
 MBAR = try_import_from("pymbar", "MBAR")
 timeseries = try_import_from("pymbar", "timeseries")
@@ -129,8 +130,11 @@ class SubSample(object):
         if N_k.shape[0]!=u_kln.shape[0]:
             RuntimeError("The number of thermodynamic states must be the same in u_kln and N_k!"
                          "u_kln has size %d and N_k has size %d" %(u_kln.shape[0], N_k.shape[0]))
-        self.subsample_method = subsample
+        self.subsample = subsample
         self.percentage = percentage
+        print ("+++++++++")
+        print (percentage)
+        print ("+++++++++")
         if percentage <0.0:
             RuntimeError("You must provide a percentage between 0 and 100")
         elif percentage>100.0:
@@ -138,12 +142,14 @@ class SubSample(object):
 
 
     def subsample_gradients(self):
-        if self.subsample_method != 'timeseries':
+        if self.subsample == False:
             print("We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
             if self.percentage == 100:
                 RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
-                               "you discarding initial data. Please set percentage to another value than 100!")
+                               "you discarding initial data. Your are trying to remove 100% of the data. "
+                               "Please set percentage to another value than 100!")
+                sys.exit(-1)
             percentage_removal = self._N_k*(1-self.percentage/100.0)
             self._subsampled_N_k_gradients = self._N_k-percentage_removal
             N_max = np.max(self._subsampled_N_k_gradients)
@@ -176,14 +182,15 @@ class SubSample(object):
                 self._subsampled_grad_kn[k, :] = self._gradients_kn[k, indices_k[k]]
 
     def subsample_energies(self):
-        if self.subsample_method!='timeseries':
+        if self.subsample == False:
             print("We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
 
-            if self.percentage ==100:
+            if self.percentage == 100:
                 RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
-                               "you discarding initial data. Please set percentage to another value than 100!")
-
+                               "you discarding initial data. Your are trying to remove 100% of the data. "
+                               "Please set percentage to another value than 100!")
+                sys.exit(-1)
             percentage_removal = self._N_k*(1-self.percentage/100.0)
             self._subsampled_N_k_energies = self._N_k-percentage_removal
             N_max = np.max(self._subsampled_N_k_energies)
@@ -234,3 +241,134 @@ class SubSample(object):
     @property
     def N_k_gradients(self):
         return self._subsampled_N_k_gradients
+
+class SimfileParser(object):
+    r""" This class will parse sim_files.dat in different lambda directories for analysis
+    """
+    def __init__(self, sim_files, lam, T):
+        #We will load all the data now
+        self._data = []
+        self.sim_files = sim_files
+        self.lam = lam
+        self.T = T
+        self._u_kln = None
+        self._N_k = None
+        self._grad_kn = None
+        self._energies_kn = None
+        self._max_l = 0
+
+    def load_data(self):
+        r"""Loads all the simfile.dat files supplied and does some sanity checks on them"""
+        num_inputfiles = len(self.sim_files)
+        g_temp = None #generating temeratures of the input files
+        lam_array = None #lambda arrays from input files
+        g_lam = None #Gnerating lambdas from all input files
+        #Lambda sanity checks
+        if self.lam is not None:
+            if num_inputfiles != lam.shape[0]:
+                raise Exception("The lambda array you supplied does not have the same length as the number of input files")
+                sys.exit(-1)
+        #sanity checking for file existance
+        for i in range(num_inputfiles):
+            #check if filesize is not zero:
+            if not os.path.exists(self.sim_files[i]):
+                raise IOError("supllied simulation file %s does not exist" %self.sim_files[i])
+            if os.stat(self.sim_files[i]).st_size == 0:
+                raise IOError("supllied simulation file %s does not contain any data" %self.sim_files[i])
+            content = None
+            with open(self.sim_files[i]) as f:
+                content = f.readlines(2000)
+            if i == 0:
+                lam_array, g_lam, g_temp = self.analyse_headers(content)
+                if self.lam is not None:
+                    if not np.array_equal(lam_array, self.lam):
+                        raise Exception("Alchemical array provided via the command line does not match the array found in %s" %self.sim_files[0])
+            else:
+                la, gl, gt = self.analyse_headers(content)
+                if not np.array_equal(la, lam_array):
+                    raise Exception("Alchemical lambda array provided in %s does not match the array in %s" %(self.sim_files[i], self.sim_files[0]))
+                    sys.exit(-1)
+                if gl not in lam_array:
+                    raise Exception("Generating lambda %s is not part of the alchemical array provided in %s" %(gl, self.sim_files[0]))
+                    sys.exit(-1)
+                if gt != g_temp:
+                    raise Exception("Generating temperature %s does not match the generativn temperature provided in %s" %(gt, self.sim_files[0]))
+                    sys.exit(-1)
+            #now we are convinced that the provided data files are sane, let's read the actual data
+            print ("Reading simulation file: %s" %self.sim_files[i])
+            self._data.append(np.loadtxt(self.sim_files[i]))
+            self.lam = lam_array
+
+        #loading data into arrays for further processing
+        #N_k is the number of samples at generating thermodynamic state (lambda) k
+        self._N_k = np.zeros(lam_array.shape[0])
+        for i in range(num_inputfiles):
+            d = self._data[i]
+            self._N_k[i] = d.shape[0]
+            if self._max_l < d.shape[0]:
+                self._max_l = d.shape[0]
+
+    def analyse_headers(self, content):
+        r"""reads information from comment lines in simfile.dat"""
+        lam_array = None
+        g_lam = None
+        g_temp = None
+        for i in range(12):
+            l = content[i]
+            if '#Generating lambda' in l:
+                l = l.split()
+                g_lam = float(l[-1])
+            if '#Generating temperature' in l:
+                l = l.split()
+                g_temp = l[-1]
+                if g_temp =='SireUnits::Celsius':
+                    g_temp = None
+            if '#Alchemical ' in l:
+                l = l.split()
+                lam_array = l[3:]
+                lam_array[0]=lam_array[0].split('(')[-1]
+                lam_array[-1]=lam_array[-1].split(')')[0]
+                lam_array = " ".join(lam_array)
+                lam_array = np.array(lam_array.split(',')).astype(float)
+        return lam_array, g_lam, g_temp
+
+    def populate_e_kn(self):
+        self._energies_kn = np.zeros(shape=(self.lam.shape[0], self._max_l))
+        for i in range(len(self._data)):
+            d = self._data[i]
+            self._energies_kn[i][:self._N_k[i]] = d[:,1]
+
+    def populate_u_kln(self):
+        self._u_kln = np.zeros(shape=(self.lam.shape[0], self.lam.shape[0], self._max_l))
+        for i in range(len(self._data)):
+            d = self._data[i]
+            self._u_kln[i][:self._N_k[i]][:self._N_k[i]] = d[:,5:].transpose()
+
+    def populate_g_kn(self):
+        self._grad_kn = np.zeros(shape=(self.lam.shape[0], self._max_l))
+        for i in range(len(self._data)):
+            d = self._data[i]
+            self._grad_kn[i][:self._N_k[i]] = d[:,2]
+
+
+    @property
+    def u_kln(self):
+        if self._u_kln == None:
+            self.populate_u_kln()
+        return self._u_kln
+
+    @property
+    def N_k(self):
+        return self._N_k
+
+    @property
+    def energies_kn(self):
+        if self._energies_kn == None:
+            self.populate_e_kn()
+        return self._energies_kn
+
+    @property
+    def grad_kn(self):
+        if self._grad_kn == None:
+            self.populate_g_kn()
+        return self._grad_kn
