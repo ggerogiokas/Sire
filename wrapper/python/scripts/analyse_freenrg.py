@@ -37,10 +37,12 @@ get in touch via the Sire users mailing list, or by creating a github issue.
 """
 
 from Sire.Analysis import *
+from Sire.Maths import AverageAndStddev
 import Sire.Stream
 import argparse
 import sys
 import os
+from Sire.Units import *
 from Sire import try_import
 from Sire.Tools.FreeEnergyAnalysis import SubSample
 from Sire.Tools.FreeEnergyAnalysis import FreeEnergies
@@ -219,7 +221,7 @@ def analyse_range(range):
     return range_start, range_end
 
 
-def do_mbar_analysis(input_file, FILE, percent = 0, lam = None, T = None, subsample = True):
+def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, subsample = True):
     r""" do an MBAR analysis using the pymbar external library
     Parameters
     ----------
@@ -240,13 +242,72 @@ def do_mbar_analysis(input_file, FILE, percent = 0, lam = None, T = None, subsam
     parser = SimfileParser(input_file, lam, T)
     parser.load_data()
     subsample_obj = SubSample(parser.grad_kn, parser.energies_kn, parser.u_kln, parser.N_k, percentage=percent, subsample=subsample)
-    subsample_obj.subsample_energies()
-    subsample_obj.subsample_gradients()
+    if parser.u_kln is not None:
+        subsample_obj.subsample_energies()
+        subsample_obj.subsample_gradients()
+    else:
+        subsample_obj.subsample_gradients()
+    #Now we have our subsampled data and want to do the analysis, either TI using Sire.Analysis or MBAR
+    ti = do_sire_TI(subsample_obj.gradients_kn, parser.lam)
+    mbar = None
+    if parser.u_kln is not None:
+        free_energy_obj = FreeEnergies(subsample_obj.u_kln, subsample_obj.N_k_energies, parser.lam, subsample_obj.gradients_kn)
+        mbar = do_mbar(free_energy_obj)
+        FILE.write("# PMFs MBAR\n")
+        FILE.write("# Lambda  PMF  Maximum  Minimum \n")
+        pmf = mbar[0]
+        error_mbar = mbar[1]
+        print (pmf)
+        print (error_mbar)
+        for i in range(pmf.shape[0]):
+            FILE.write("%f  %f %f %f \n" % (pmf[i][0], pmf[i][1], pmf[i][1]+error_mbar[i], pmf[i][1]-error_mbar[i]))
+    #TI results
+    FILE.write("# PMFs TI\n")
+    FILE.write("# Lambda  PMF  Maximum  Minimum \n")
+    for p in ti.values():
+        FILE.write("%f  %f  %f  %f \n" % \
+        (p.x(),p.y(), \
+        p.y()-p.yError(), \
+        p.y()+p.yError()) )
+    #Now printing out free energy differences:
 
-    free_energy_obj = FreeEnergies(subsample_obj.u_kln, subsample_obj.N_k_energies, parser.lam, subsample_obj.gradients_kn)
+def do_sire_TI(gradients_kn, lam):
+    r""" generates a sire.Analysis.Gradients object that allows to compute TI gradients
+    Parameters
+    ----------
+    gradients_kn : np.array(shape=(nlambda, nsamples))
+        array that contains all the subsampled gradients
+    lam : np.array(shape(nlambda))
+        array that contains all simulated lambda values
+    """
+    #adapted from script by Christopher Woods
+    grad_data = {}
+    for l in range(lam.shape[0]):
+        grad_data[lam[l]] = gradients_kn[l,:]
+    lam_avgs = {}
+    for lamval in grad_data:
+        avg = AverageAndStddev()
+        for grad in grad_data[lamval]:
+            avg.accumulate(grad)
+        lam_avgs[lamval] = avg
+    gradients = Gradients(lam_avgs)
+    # Note that if you have a set of FreeEnergyAverages, then
+    # you need to pass in the value of delta lambda for FDTI, e.g.
+    # gradients = Gradients(lam_avgs, delta_lam)
+
+    # Note that if you have both forwards and backwards gradients,
+    # then you need to pass them both in, e.g. via
+    # gradients = Gradients(lam_avg_fwds, lam_avg_bwds, delta_lam)
+
+    pmf_ti = gradients.integrate()
+    return pmf_ti
+
+def do_mbar(free_energy_obj):
     free_energy_obj.run_mbar()
-    free_energy_obj.run_ti()
-    #ok, now we have all the objects we want, we need to write them to file. 
+    pmf_mbar = free_energy_obj.pmf_mbar
+    error_mbar = free_energy_obj.error_pmf_mbar
+    return (pmf_mbar, error_mbar)
+
 
 def do_sire_analysis(input_file, FILE, range_start, range_end, percent):
     r""" do sire analysis contains all the analysis script using Sire.Analysis for free energies
@@ -424,7 +485,7 @@ if __name__ == '__main__':
 
     #We have a bunch of simfiles that are used for an MBAR analysis, but also produce output for TI, and BAR
     if sim_files:
-        do_mbar_analysis(sim_files, FILE)
+        do_simfile_analysis(sim_files, FILE)
 
     #Deal with lambda directory input, where no specific input files are supplied instead look for default input files in the given directories
 

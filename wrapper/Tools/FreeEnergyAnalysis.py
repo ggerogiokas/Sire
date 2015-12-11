@@ -76,10 +76,17 @@ class FreeEnergies(object):
         self._pmf_mbar = np.zeros(shape=(self._lambda_array.shape[0], 2))
         self._pmf_mbar[:, 0] = self._lambda_array
         self._pmf_mbar[:, 1] = self._f_k
+        self._error_pmf_mbar = np.zeros(shape=(self._lambda_array.shape[0]))
+        self._error_pmf_mbar = dDeltaF_ij[0,:]
 
     @property
     def pmf_ti(self):
         return self._pmf_ti
+
+    @property
+    def error_pmf_mbar(self):
+        return self._error_pmf_mbar
+    
 
     @property
     def pmf_mbar(self):
@@ -132,9 +139,6 @@ class SubSample(object):
                          "u_kln has size %d and N_k has size %d" %(u_kln.shape[0], N_k.shape[0]))
         self.subsample = subsample
         self.percentage = percentage
-        print ("+++++++++")
-        print (percentage)
-        print ("+++++++++")
         if percentage <0.0:
             RuntimeError("You must provide a percentage between 0 and 100")
         elif percentage>100.0:
@@ -263,6 +267,7 @@ class SimfileParser(object):
         g_temp = None #generating temeratures of the input files
         lam_array = None #lambda arrays from input files
         g_lam = None #Gnerating lambdas from all input files
+        g_lam_list = []
         #Lambda sanity checks
         if self.lam is not None:
             if num_inputfiles != lam.shape[0]:
@@ -283,6 +288,9 @@ class SimfileParser(object):
                 if self.lam is not None:
                     if not np.array_equal(lam_array, self.lam):
                         raise Exception("Alchemical array provided via the command line does not match the array found in %s" %self.sim_files[0])
+                if lam_array is None:
+                    print("It seems that no lambda array was given as input for the simulation, no MBAR analysis will be possible.")
+                g_lam_list.append(float(g_lam))
             else:
                 la, gl, gt = self.analyse_headers(content)
                 if not np.array_equal(la, lam_array):
@@ -294,14 +302,19 @@ class SimfileParser(object):
                 if gt != g_temp:
                     raise Exception("Generating temperature %s does not match the generativn temperature provided in %s" %(gt, self.sim_files[0]))
                     sys.exit(-1)
+                #if everything is ok record the generating lambda. 
+                g_lam_list.append(float(g_lam))
             #now we are convinced that the provided data files are sane, let's read the actual data
             print ("Reading simulation file: %s" %self.sim_files[i])
             self._data.append(np.loadtxt(self.sim_files[i]))
-            self.lam = lam_array
+            if lam_array is None:
+                self.lam = np.array(g_lam_list)
+            else:
+                self.lam = lam_array
 
         #loading data into arrays for further processing
         #N_k is the number of samples at generating thermodynamic state (lambda) k
-        self._N_k = np.zeros(lam_array.shape[0])
+        self._N_k = np.zeros(self.lam.shape[0])
         for i in range(num_inputfiles):
             d = self._data[i]
             self._N_k[i] = d.shape[0]
@@ -326,10 +339,13 @@ class SimfileParser(object):
             if '#Alchemical ' in l:
                 l = l.split()
                 lam_array = l[3:]
-                lam_array[0]=lam_array[0].split('(')[-1]
-                lam_array[-1]=lam_array[-1].split(')')[0]
-                lam_array = " ".join(lam_array)
-                lam_array = np.array(lam_array.split(',')).astype(float)
+                if len(lam_array) < 2:
+                    lam_array = None
+                else:
+                    lam_array[0]=lam_array[0].split('(')[-1]
+                    lam_array[-1]=lam_array[-1].split(')')[0]
+                    lam_array = " ".join(lam_array)
+                    lam_array = np.array(lam_array.split(',')).astype(float)
         return lam_array, g_lam, g_temp
 
     def populate_e_kn(self):
@@ -340,9 +356,12 @@ class SimfileParser(object):
 
     def populate_u_kln(self):
         self._u_kln = np.zeros(shape=(self.lam.shape[0], self.lam.shape[0], self._max_l))
-        for i in range(len(self._data)):
-            d = self._data[i]
-            self._u_kln[i][:self._N_k[i]][:self._N_k[i]] = d[:,5:].transpose()
+        if self._data[0].shape[0] > 5:
+            for i in range(len(self._data)):
+                d = self._data[i]
+                self._u_kln[i][:self._N_k[i]][:self._N_k[i]] = d[:,5:].transpose()
+        else: 
+            self._ukln = None
 
     def populate_g_kn(self):
         self._grad_kn = np.zeros(shape=(self.lam.shape[0], self._max_l))
@@ -353,7 +372,7 @@ class SimfileParser(object):
 
     @property
     def u_kln(self):
-        if self._u_kln == None:
+        if self._u_kln is None:
             self.populate_u_kln()
         return self._u_kln
 
@@ -363,12 +382,12 @@ class SimfileParser(object):
 
     @property
     def energies_kn(self):
-        if self._energies_kn == None:
+        if self._energies_kn is None:
             self.populate_e_kn()
         return self._energies_kn
 
     @property
     def grad_kn(self):
-        if self._grad_kn == None:
+        if self._grad_kn is None:
             self.populate_g_kn()
         return self._grad_kn
