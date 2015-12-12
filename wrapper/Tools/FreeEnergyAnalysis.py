@@ -9,6 +9,7 @@
 
 from Sire import try_import
 from Sire import try_import_from
+from Sire.Units import *
 import os
 np = try_import("numpy")
 MBAR = try_import_from("pymbar", "MBAR")
@@ -30,9 +31,10 @@ class FreeEnergies(object):
         reduced gradients
     """
 
-    def __init__(self, u_kln=None, N_k=None, lambda_array=None, gradients_kn=None):
+    def __init__(self, g_temp = None, u_kln=None, N_k=None, lambda_array=None, gradients_kn=None):
         r"""The data passed here is already subsampled"""
 
+        self.T = g_temp
         self._u_kln = u_kln
         self._N_k = N_k
         self._lambda_array = lambda_array
@@ -69,7 +71,7 @@ class FreeEnergies(object):
     def run_mbar(self):
         r"""Runs MBAR free energy estimate """
         MBAR_obj = MBAR(self._u_kln, self._N_k, verbose=True)
-        self._f_k = MBAR_obj.f_k
+        self._f_k = MBAR_obj.f_k*self.T*k_boltz
         (deltaF_ij, dDeltaF_ij, theta_ij) = MBAR_obj.getFreeEnergyDifferences()
         self._deltaF_mbar = deltaF_ij[0, self._lambda_array.shape[0]-1]
         self._dDeltaF_mbar = dDeltaF_ij[0, self._lambda_array.shape[0]-1]
@@ -77,7 +79,7 @@ class FreeEnergies(object):
         self._pmf_mbar[:, 0] = self._lambda_array
         self._pmf_mbar[:, 1] = self._f_k
         self._error_pmf_mbar = np.zeros(shape=(self._lambda_array.shape[0]))
-        self._error_pmf_mbar = dDeltaF_ij[0,:]
+        self._error_pmf_mbar = dDeltaF_ij[0,:]*self.T*k_boltz
 
     @property
     def pmf_ti(self):
@@ -314,6 +316,7 @@ class SimfileParser(object):
             else:
                 self.lam = lam_array
 
+
         #loading data into arrays for further processing
         #N_k is the number of samples at generating thermodynamic state (lambda) k
         self._N_k = np.zeros(self.lam.shape[0])
@@ -335,9 +338,16 @@ class SimfileParser(object):
                 g_lam = float(l[-1])
             if '#Generating temperature' in l:
                 l = l.split()
-                g_temp = l[-1]
-                if g_temp =='SireUnits::Celsius':
+                g_temp = l[-2]+'*'+l[-1]
+                if l[-1] =='SireUnits::Celsius':
                     g_temp = None
+                if l[-1] == "C":
+                    g_temp = float(l[-2])*celsius
+                elif l[-1] == "F":
+                    g_temp = float(l[-2])*frahrenheit
+                else:
+                    g_temp = float(l[-2])*kelvin
+                g_temp = g_temp.value()
             if '#Alchemical ' in l:
                 l = l.split()
                 lam_array = l[3:]

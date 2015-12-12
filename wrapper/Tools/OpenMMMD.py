@@ -1455,8 +1455,8 @@ def runFreeNrg():
         outfile.write(bytes("#Alchemical array is\t\t "+ str(lambda_array.val) +"\n", "UTF-8"))
         outfile.write(bytes("#Generating temperature is \t"+str(temperature.val)+"\n", "UTF-8"))
         outfile.write(bytes("#Energy was saved every "+str(energy_frequency.val)+ " steps \n#\n#\n", "UTF-8"))
-        outfile.write(bytes("# %8s %25s %25s %25s %25s %25s" % ("[step]", "[potential kcal/mol]", "[gradient]",
-        "[forward Metropolis]", "[backward Metropolis]", "[u_kl]\n"),
+        outfile.write(bytes("# %8s %25s %25s %25s %25s %25s" % ("[step]", "[potential kcal/mol]", "[gradient kcal/mol]",
+        "[forward Metropolis kcal/mol]", "[backward Metropolis kcal/mol]", "[u_kl]\n"),
                             "UTF-8"))
 
     else:
