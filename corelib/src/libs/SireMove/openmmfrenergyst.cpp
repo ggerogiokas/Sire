@@ -3349,7 +3349,7 @@ void OpenMMFrEnergyST::integrate(IntegratorWorkspace &workspace,
         }
         
         //Now we append all the calculated information to the useful accumulation arrays
-        finite_diff_gradients.append(actual_gradient * beta);
+        finite_diff_gradients.append(actual_gradient);
         forward_Metropolis.append(m_forward);
         backward_Metropolis.append(m_backward);
 
