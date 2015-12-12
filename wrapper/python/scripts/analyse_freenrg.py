@@ -243,9 +243,11 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
     parser.load_data()
     subsample_obj = SubSample(parser.grad_kn, parser.energies_kn, parser.u_kln, parser.N_k, percentage=percent, subsample=subsample)
     if parser.u_kln is not None:
+        print ("We can run an MBAR analysis", flush=True)
         subsample_obj.subsample_energies()
         subsample_obj.subsample_gradients()
     else:
+        print ("We will only run a TI analysis", flush=True)
         subsample_obj.subsample_gradients()
     #Now we have our subsampled data and want to do the analysis, either TI using Sire.Analysis or MBAR
     ti = do_sire_TI(subsample_obj.gradients_kn, parser.lam)
