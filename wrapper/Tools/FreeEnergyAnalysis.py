@@ -88,7 +88,6 @@ class FreeEnergies(object):
     @property
     def error_pmf_mbar(self):
         return self._error_pmf_mbar
-    
 
     @property
     def pmf_mbar(self):
@@ -121,7 +120,7 @@ class SubSample(object):
     lambda_array : ndarray(shape=(therm_states), dtype=float)
         lambda thermodynamic values
     percentage : int [0,100]
-        percentage of the data that should be discarded from the beginning of the simulation
+        percentage of the data that should be retained from the simulation
     subsample : string
         string idenfier for subsampling method, default='timeseries' from timeseries module in MBAR
     """
@@ -150,12 +149,12 @@ class SubSample(object):
 
     def subsample_gradients(self):
         if self.subsample == False:
-            print("We are only eliminating samples from the beginning of the data and are still working with highly"
+            print("# We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
-            if self.percentage == 100:
+            if self.percentage == 0:
                 RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
                                "you discarding initial data. Your are trying to remove 100% of the data. "
-                               "Please set percentage to another value than 100!")
+                               "Please set percentage to another value than 0!")
                 sys.exit(-1)
             percentage_removal = self._N_k*(1-self.percentage/100.0)
             self._subsampled_N_k_gradients = self._N_k-percentage_removal
@@ -167,7 +166,7 @@ class SubSample(object):
                 RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
         else:
-            print("We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
+            print("# We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
                   " gradients according to that.")
             #first we compute statistical inefficiency
             g_k = np.zeros(shape=(self._gradients_kn.shape[0]))
@@ -190,13 +189,13 @@ class SubSample(object):
 
     def subsample_energies(self):
         if self.subsample == False:
-            print("We are only eliminating samples from the beginning of the data and are still working with highly"
+            print("# We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
 
-            if self.percentage == 100:
+            if self.percentage == 0:
                 RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
                                "you discarding initial data. Your are trying to remove 100% of the data. "
-                               "Please set percentage to another value than 100!")
+                               "Please set percentage to another value than 0!")
                 sys.exit(-1)
             percentage_removal = self._N_k*(1-self.percentage/100.0)
             self._subsampled_N_k_energies = self._N_k-percentage_removal
@@ -209,7 +208,7 @@ class SubSample(object):
                 RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
         else:
-            print("We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
+            print("# We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
                   " energies vi according to that.")
 
             #first we compute statistical inefficiency
@@ -292,7 +291,7 @@ class SimfileParser(object):
                     if not np.array_equal(lam_array, self.lam):
                         raise Exception("Alchemical array provided via the command line does not match the array found in %s" %self.sim_files[0])
                 if lam_array is None:
-                    print("It seems that no lambda array was given as input for the simulation, no MBAR analysis will be possible.")
+                    print("# It seems that no lambda array was given as input for the simulation, no MBAR analysis will be possible.")
                 g_lam_list.append(float(g_lam))
             else:
                 la, gl, gt = self.analyse_headers(content)
@@ -309,7 +308,7 @@ class SimfileParser(object):
                 #if everything is ok record the generating lambda. 
                 g_lam_list.append(float(gl))
             #now we are convinced that the provided data files are sane, let's read the actual data
-            print ("Reading simulation file: %s" %self.sim_files[i])
+            print ("# Reading simulation file: %s" %self.sim_files[i])
             self._data.append(np.loadtxt(self.sim_files[i]))
             if lam_array is None:
                 self.lam = np.array(g_lam_list)

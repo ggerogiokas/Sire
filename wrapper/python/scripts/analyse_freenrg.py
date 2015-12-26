@@ -50,7 +50,7 @@ from Sire.Tools.FreeEnergyAnalysis import SimfileParser
 np = try_import("numpy")
 
 
-def process_free_energies(nrgs, FILE, range_start, range_end):
+def process_free_energies(nrgs, FILE, range_start, range_end, percent):
     r"""Analysies free energies and computes PMFs
     Parameters
     ----------
@@ -139,7 +139,7 @@ def parse_args():
                         help="Supply the name of the Sire Streamed Save (.s3) file containing the "
                              "free energies to be analysed.")
 
-    parser.add_argument('-l', '--lmabda_input', nargs=1,
+    parser.add_argument('-l', '--lambda_input', nargs='*',
                         help="Supply the name of all lambda directories that contain files "
                              "with free energies to be analysed.")
 
@@ -165,7 +165,7 @@ def parse_args():
     parser.add_argument('--lam', nargs='*', type=float,
                         help="The values of lambda at which a PMF should be evaluated.")
 
-    parser.add_argument('--temperature', type=float, help= 'temperature in [Kelvin] at which the simulation was generated.')
+    parser.add_argument('-t', '--temperature', type=float, help= 'temperature in [Kelvin] at which the simulation was generated.')
 
     sys.stdout.write("\n")
     args = parser.parse_args()
@@ -177,10 +177,8 @@ def parse_args():
         must_exit = True
 
     if args.author:
-        print("\nanalyse_freenrg was written by Christopher Woods")
-        print(" and Antonia Mey (C) 2015.")
-        print("\nIt is based on the analysis tools in Sire.Analysis, ")
-        print("as well as pymbar (https://github.com/choderalab/pymbar) ")
+        print("\nanalyse_freenrg was written by Christopher Woods and Antonia Mey (C) 2015.")
+        print("\nIt is based on the analysis tools in Sire.Analysis, as well as pymbar (https://github.com/choderalab/pymbar)")
         must_exit = True
 
     if args.version:
@@ -208,17 +206,17 @@ def analyse_range(range):
         end integer for the range to be analysed
     """
 
-    range_start = int(range[0])
-    range_end = int(range[1])
-    if range_end < 1:
-        range_end = 1
-    if range_start < 1:
-        range_start = 1
-    if range_start > range_end:
-        tmp = range_start
-        range_start = range_end
-        range_end = tmp
-    return range_start, range_end
+    r_start = int(range[0])
+    r_end = int(range[1])
+    if r_end < 1:
+        r_end = 1
+    if r_start < 1:
+        r_start = 1
+    if r_start > r_end:
+        tmp = r_start
+        r_start = r_end
+        r_end = tmp
+    return r_start, r_end
 
 
 def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, subsample = True):
@@ -233,7 +231,7 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
         lambda array at which free energies should be evaluated, free energy differences are always computed between
         lambda = 0.0 and lambda = 1.0.
     T : double
-        temperatue at which the simualtion was simulated
+        temperature at which the simulation was simulated
     percent : double
         percentage of data that should be used for analysis. 
         Default all data will initially used, but subsampled according to statistical inefficiency.
@@ -247,7 +245,7 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
         subsample_obj.subsample_energies()
         subsample_obj.subsample_gradients()
     else:
-        print ("We will only run a TI analysis", flush=True)
+        print ("# We will only run a TI analysis", flush=True)
         subsample_obj.subsample_gradients()
     #Now we have our subsampled data and want to do the analysis, either TI using Sire.Analysis or MBAR
     ti = do_sire_TI(subsample_obj.gradients_kn, parser.lam)
@@ -261,16 +259,23 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
         error_mbar = mbar[1]
         print (pmf)
         print (error_mbar)
+        FILE.write("# Free energies MBAR \n")
         for i in range(pmf.shape[0]):
             FILE.write("%f  %f %f %f \n" % (pmf[i][0], pmf[i][1], pmf[i][1]+error_mbar[i], pmf[i][1]-error_mbar[i]))
     #TI results
     FILE.write("# PMFs TI\n")
     FILE.write("# Lambda  PMF  Maximum  Minimum \n")
     for p in ti.values():
-        FILE.write("%f  %f  %f  %f \n" % \
+        FILE.write("%.2f  %f  %f  %f \n" % \
         (p.x(),p.y(), \
         p.y()-p.yError(), \
         p.y()+p.yError()) )
+    FILE.write("# Free energies TI \n")
+    FILE.write("# %s = %s +/- %s kcal mol-1" % ("TI", ti.deltaG(), ti.values()[-1].yMaxError()))
+    try:
+        FILE.write(" (quadrature = %s kcal mol-1)\n" % ti.quadrature())
+    except:
+        pass
     #Now printing out free energy differences:
 
 def do_sire_TI(gradients_kn, lam):
@@ -369,7 +374,7 @@ def do_sire_analysis(input_file, FILE, range_start, range_end, percent):
 
         for value in result[2].values():
             FILE.write(
-                "%s  %s  %s  %s\n" % (value.x(), value.y(), value.y() + value.yMaxError(), value.y() - value.yMaxError()))
+                "%.2f  %f  %f  %f\n" % (value.x(), value.y(), value.y() + value.yMaxError(), value.y() - value.yMaxError()))
 
     FILE.write("# Free energies \n")
 
@@ -422,10 +427,49 @@ def convert_gradient_files(gradient_files):
     Sire.Stream.save(ti, input_file)
     return [input_file]
 
+def do_directory_analysis(lam_dirs, FILE, range_start, range_end, percent, lam, T, subsample):
+    grd_files = True
+    grd_file_list = []
+    sim_files = True
+    simf_file_list = []
+    for l in lam_dirs:
+        if not os.path.isfile(os.path.join(l, 'simfile.dat')):
+            sim_files = False
+        else:
+            simf_file_list.append(os.path.join(l, 'simfile.dat'))
+        if not os.path.isfile(os.path.join(l, 'gradients.s3')):
+            grd_files = False
+        else:
+            grd_file_list.append(os.path.join(l, 'gradients.s3'))
+    if not grd_files and not sim_files and not os.path.isfile('freenrg.s3'):
+        print("The supplied directories do not contain appropriate files for analysis. Each directory must at least contain"
+              " either a simfile.dat or a gradients.s3 file. Neither does the base directory contain a freenrg.s3 file."
+              " If you used non-default names for your outputfiles during your simulation "
+              "please use the -g options for your gradient files, the -s for simulation files and -i for a free energy "
+              "binary files.")
+        sys.exit(-1)
+    else:
+        if os.path.isfile('freenrgs.s3'):
+            do_sire_analysis('freenrgs.s3',FILE, range_start, range_end, percent)
+        if grd_files:
+            input_file = convert_gradient_files(grd_file_list)
+            do_sire_analysis(input_file, FILE, range_start, range_end, percent)
+            cmd = "rm freenrgs.s3"
+            os.system(cmd)
+        if sim_files:
+            do_simfile_analysis(simf_file_list, FILE, percent, lam, T, subsample)
+
+
+
 if __name__ == '__main__':
     #Here is the main body of the script
     #Let's check all the arguments properly and assign things according to the arguemnts
     args, parser = parse_args()
+    if args.lambda_input:
+        lam_dirs = args.lambda_input
+    else:
+        lam_dirs = None
+
     if args.input:
         input_file = args.input
     else:
@@ -457,7 +501,7 @@ if __name__ == '__main__':
     else:
         percent = 60.0
 
-    if not input_file and not gradient_files and not sim_files and not args.lmabda_input:
+    if not input_file and not gradient_files and not sim_files and not lam_dirs:
         parser.print_help()
         print("\nPlease supply the name of the .s3 file(s) containing the free energies/gradients to be analysed, or a list of directories"
               "containing either .s3 files or simfile.dat files, and example usage is:\n"
@@ -472,24 +516,31 @@ if __name__ == '__main__':
         print("# Writing all output to stdout")
         FILE = sys.stdout
 
-    FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % input_file)
+
 
     #We have a single or set of free energy files and do a free energy analysis useing Sire.Analysis
     if input_file:
-        do_sire_analysis(input_file, FILE, range_start, range_end)
+        FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % input_file)
+        do_sire_analysis(input_file, FILE, range_start, range_end, percent)
 
     #We have a bunch of gradient files in binary stream format and create an free energy object file which is then Analysed with Sire.Analysis
     if gradient_files:
+        FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % gradient_files)
         input_file = convert_gradient_files(gradient_files)
-        do_sire_analysis(input_file, FILE, range_start, range_end)
+        do_sire_analysis(input_file, FILE, range_start, range_end, percent)
         cmd = "rm freenrgs.s3"
         os.system(cmd)
 
     #We have a bunch of simfiles that are used for an MBAR analysis, but also produce output for TI, and BAR
     if sim_files:
-        do_simfile_analysis(sim_files, FILE)
+        FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % sim_files)
+        do_simfile_analysis(sim_files, FILE, percent, lam = args.lam, T = args.temperature, subsample = True)
 
     #Deal with lambda directory input, where no specific input files are supplied instead look for default input files in the given directories
+    if lam_dirs:
+        FILE.write("# Analysing free energies contained in directory(s) \"%s\"\n" % lam_dirs)
+        do_directory_analysis(lam_dirs, FILE, range_start, range_end, percent, lam = args.lam, T = args.temperature, subsample = True)
 
+    #print("Free Energy Analysis done.")
 
 
