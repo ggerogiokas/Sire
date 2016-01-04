@@ -1,7 +1,11 @@
+# coding=utf-8
 description = """
-analyse_freenrg is an analysis app that has been designed to analyse the output of all free energy calculations in Sire.
- analyse_freenrg reads in a Sire Saved Stream (.s3) file that contains a list of Sire.Analysis free energy objects (e.g.
- FEP, TI, Bennetts). analyse_freenrg will average and analyse these free energies according the to options you supply,
+analyse_freenrg --
+is an analysis app that has been designed to analyse the output of free energy calculations in Sire.
+analyse_freenrg can read in multiple file types.
+1. It reads a Sire Saved Stream (.s3) file that contains a list of Sire.Analysis free energy objects (e.g.
+ FEP, TI, Bennetts).
+ analyse_freenrg will average and analyse these free energies according the to options you supply,
  e.g. assuming that the free energies are stored in freenrgs.s3, and you want to average iterations 100-200 from the
  simulation, and write the results to ‘results.txt’, type;
 
@@ -13,7 +17,17 @@ sire.app/bin/analyse_freenrg -i freenrgs.s3 -o results.txt
 
 (you can specify the percentage to average using the ‘--percent’ option)
 
-analyse_freenrg automatically knows how many free energies are contained in the s3 file, what their types are and what
+2. analyse_freenrg can also read an ascii simulation.dat file generated with somd-freenerg. A common usage for this type of file would be
+the analysis of a list of input files containing alchemical simulation data for a TI analysis and MBAR analysis. A usage example
+would look like this:
+
+sire.app/bin/analyse_freenrg -s lambda-*/simfile.dat -o results.txt
+
+or just supplying a list of input directories
+
+sire.app/bin/analyse_freenrg -l lambda-* -o results.txt
+
+3. analyse_freenrg automatically knows how many free energies are contained in the s3 file, what their types are and what
 should be done to analyse the results. For example, the waterswap, ligandswap and quantomm apps all output s3 files that
 contain FEP, Bennetts and TI free energy data, so analyse_freenrg knows automatically to perform FEP, Bennetts and TI
 analysis on that data and to report all of the results. analyse_freenrg also knows whether or not finite difference
@@ -24,7 +38,7 @@ potential of mean force (PMF) or final result.
 For FEP data, analyse_freenrg will return the FEP PMF across lambda, together with errors based on statistical
 convergence (95% standard error) and the difference between forwards and backwards free energies (if available).
 
-For Bennetts data, analyse_freenrg will return the Bennetts Acceptance Ratio PMF across lambda, with errors based on
+For Bennett's data, analyse_freenrg will return the Bennett's Acceptance Ratio PMF across lambda, with errors based on
 statistical convergence (95% standard error).
 
 For TI data, analyse_free energy will return the PMF across lambda based on polynomial fitting of the gradients and
@@ -57,7 +71,7 @@ def process_free_energies(nrgs, FILE, range_start, range_end, percent):
     nrgs :
 
     FILE : filehandle
-        eiether standard out or outputfile given in the arguments
+        either standard out or outputfile given in the arguments
     range_start : int
         starting point of the data for analysis
     range_end : int
@@ -251,17 +265,21 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
     ti = do_sire_TI(subsample_obj.gradients_kn, parser.lam)
     mbar = None
     if parser.u_kln is not None:
-        free_energy_obj = FreeEnergies(subsample_obj.u_kln, subsample_obj.N_k_energies, parser.lam, subsample_obj.gradients_kn)
+        free_energy_obj = FreeEnergies(u_kln = subsample_obj.u_kln, N_k =subsample_obj.N_k_energies, lambda_array = parser.lam, gradients_kn = subsample_obj.gradients_kn)
         mbar = do_mbar(free_energy_obj)
         FILE.write("# PMFs MBAR\n")
         FILE.write("# Lambda  PMF  Maximum  Minimum \n")
         pmf = mbar[0]
         error_mbar = mbar[1]
-        print (pmf)
-        print (error_mbar)
         FILE.write("# Free energies MBAR \n")
         for i in range(pmf.shape[0]):
             FILE.write("%f  %f %f %f \n" % (pmf[i][0], pmf[i][1], pmf[i][1]+error_mbar[i], pmf[i][1]-error_mbar[i]))
+        FILE.write("# Free energies MBAR \n")
+        if T is not None:
+            FILE.write("# %s = %s +/- %s kcal mol-1\n" % ("MBAR", ti.deltaG(), ti.values()[-1].yMaxError()))
+        else:
+            print ('#If you want estimates in kcal mol-1 please provide a simulation temperature')
+            FILE.write("# %s = %s +/- %s reduced units\n" % ("MBAR", pmf[-1][1], error_mbar[-1]))
     #TI results
     FILE.write("# PMFs TI\n")
     FILE.write("# Lambda  PMF  Maximum  Minimum \n")
@@ -387,7 +405,7 @@ def do_sire_analysis(input_file, FILE, range_start, range_end, percent):
             pass
 
         FILE.write("#\n")
-    FILE.close()
+    #FILE.close()
 
 def convert_gradient_files(gradient_files):
     # Multiple input files provided. Assume we have several gradients files that must be combined
@@ -541,6 +559,7 @@ if __name__ == '__main__':
         FILE.write("# Analysing free energies contained in directory(s) \"%s\"\n" % lam_dirs)
         do_directory_analysis(lam_dirs, FILE, range_start, range_end, percent, lam = args.lam, T = args.temperature, subsample = True)
 
+    FILE.close()
     #print("Free Energy Analysis done.")
 
 

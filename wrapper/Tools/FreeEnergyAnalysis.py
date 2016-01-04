@@ -11,6 +11,10 @@ from Sire import try_import
 from Sire import try_import_from
 from Sire.Units import *
 import os
+import sys
+from io import StringIO
+from functools import wraps
+
 np = try_import("numpy")
 MBAR = try_import_from("pymbar", "MBAR")
 timeseries = try_import_from("pymbar", "timeseries")
@@ -35,7 +39,7 @@ class FreeEnergies(object):
         r"""The data passed here is already subsampled"""
 
         self.T = g_temp
-        self._u_kln = u_kln
+        self._u_kln = np.array(u_kln)
         self._N_k = N_k
         self._lambda_array = lambda_array
         self._gradients_kn = gradients_kn
@@ -46,6 +50,47 @@ class FreeEnergies(object):
         self._dDeltaF_mbar = None
         self._f_k = None
         self._pmf_ti = None
+
+
+
+    def mute(self,returns_output=False):
+        """
+        Decorate a function that prints to stdout, intercepting the output.
+        If "returns_output" is True, the function will return a generator
+        yielding the printed lines instead of the return values.
+
+        The decorator litterally hijack sys.stdout during each function
+        execution for ALL THE THREADS, so be careful with what you apply it to
+        and in which context.
+
+        >>> def numbers():
+            print "42"
+            print "1984"
+        ...
+        >>> numbers()
+        42
+        1984
+        >>> mute()(numbers)()
+        >>> list(mute(True)(numbers)())
+        ['42', '1984']
+
+        """
+        def decorator(func):
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+
+                saved_stdout = sys.stdout
+                sys.stdout = StringIO.StringIO()
+
+                try:
+                    out = func(*args, **kwargs)
+                    if returns_output:
+                        out = sys.stdout.getvalue().strip().split()
+                finally:
+                    sys.stdout = saved_stdout
+
+                return out
 
     def run_ti(self, cubic_spline=False):
         r"""Runs Thermodynamic integration free energy estimate
@@ -70,8 +115,12 @@ class FreeEnergies(object):
 
     def run_mbar(self):
         r"""Runs MBAR free energy estimate """
-        MBAR_obj = MBAR(self._u_kln, self._N_k, verbose=True)
-        self._f_k = MBAR_obj.f_k*self.T*k_boltz
+        MBAR_obj = self.mute()(MBAR(self._u_kln, self._N_k, verbose=True))()
+        if self.T is not None:
+            self._f_k = MBAR_obj.f_k*self.T*k_boltz
+        else:
+            self._f_k = MBAR_obj.f_k
+            print ("#Warning!, Simulation temperature is None, all results are given in reduced units!")
         (deltaF_ij, dDeltaF_ij, theta_ij) = MBAR_obj.getFreeEnergyDifferences()
         self._deltaF_mbar = deltaF_ij[0, self._lambda_array.shape[0]-1]
         self._dDeltaF_mbar = dDeltaF_ij[0, self._lambda_array.shape[0]-1]
@@ -79,7 +128,10 @@ class FreeEnergies(object):
         self._pmf_mbar[:, 0] = self._lambda_array
         self._pmf_mbar[:, 1] = self._f_k
         self._error_pmf_mbar = np.zeros(shape=(self._lambda_array.shape[0]))
-        self._error_pmf_mbar = dDeltaF_ij[0,:]*self.T*k_boltz
+        if self.T is not None:
+            self._error_pmf_mbar = dDeltaF_ij[0,:]*self.T*k_boltz
+        else:
+            self._error_pmf_mbar = dDeltaF_ij[0,:]
 
     @property
     def pmf_ti(self):
@@ -209,7 +261,7 @@ class SubSample(object):
                                "be trustworthy. ")
         else:
             print("# We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
-                  " energies vi according to that.")
+                  " energies according to that.")
 
             #first we compute statistical inefficiency
             g_k = np.zeros(shape=(self._energies_kn.shape[0]))
@@ -230,6 +282,7 @@ class SubSample(object):
             self._subsampled_u_kln = np.zeros([self._gradients_kn.shape[0],self._gradients_kn.shape[0], N_max], np.float64)
             for k in range(self._gradients_kn.shape[0]):
                 self._subsampled_u_kln[k,:,:] = self._u_kln[k,:,indices_k[k]].transpose()
+            self._subsampled_u_kln = np.array(self._subsampled_u_kln)
 
     @property
     def u_kln(self):
@@ -281,7 +334,7 @@ class SimfileParser(object):
             if not os.path.exists(self.sim_files[i]):
                 raise IOError("supllied simulation file %s does not exist" %self.sim_files[i])
             if os.stat(self.sim_files[i]).st_size == 0:
-                raise IOError("supllied simulation file %s does not contain any data" %self.sim_files[i])
+                raise IOError("suplied simulation file %s does not contain any data" %self.sim_files[i])
             content = None
             with open(self.sim_files[i]) as f:
                 content = f.readlines(2000)
@@ -337,24 +390,32 @@ class SimfileParser(object):
                 g_lam = float(l[-1])
             if '#Generating temperature' in l:
                 l = l.split()
-                g_temp = l[-2]+'*'+l[-1]
                 if l[-1] =='SireUnits::Celsius':
                     g_temp = None
-                if l[-1] == "C":
-                    g_temp = float(l[-2])*celsius
-                elif l[-1] == "F":
-                    g_temp = float(l[-2])*frahrenheit
                 else:
-                    g_temp = float(l[-2])*kelvin
-                g_temp = g_temp.value()
+                    g_temp = l[-2]+'*'+l[-1]
+                    if l[-1] == "C":
+                        g_temp = float(l[-2])*celsius
+                    elif l[-1] == "F":
+                        g_temp = float(l[-2])*fahrenheit
+                    else:
+                        g_temp = float(l[-2])*kelvin
+                    g_temp = g_temp.value()
+
             if '#Alchemical ' in l:
                 l = l.split()
                 lam_array = l[3:]
+                round_bracket = False
+                for s in filter (lambda x: '(' in x, l): round_bracket = True
                 if len(lam_array) < 2:
                     lam_array = None
                 else:
-                    lam_array[0]=lam_array[0].split('(')[-1]
-                    lam_array[-1]=lam_array[-1].split(')')[0]
+                    if round_bracket:
+                        lam_array[0]=lam_array[0].split('(')[-1]
+                        lam_array[-1]=lam_array[-1].split(')')[0]
+                    else:
+                        lam_array[0]=lam_array[0].split('[')[-1]
+                        lam_array[-1]=lam_array[-1].split(']')[0]
                     lam_array = " ".join(lam_array)
                     lam_array = np.array(lam_array.split(',')).astype(float)
         return lam_array, g_lam, g_temp
