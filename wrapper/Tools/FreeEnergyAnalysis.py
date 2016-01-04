@@ -12,8 +12,6 @@ from Sire import try_import_from
 from Sire.Units import *
 import os
 import sys
-from io import StringIO
-from functools import wraps
 
 np = try_import("numpy")
 MBAR = try_import_from("pymbar", "MBAR")
@@ -51,46 +49,6 @@ class FreeEnergies(object):
         self._f_k = None
         self._pmf_ti = None
 
-
-
-    def mute(self,returns_output=False):
-        """
-        Decorate a function that prints to stdout, intercepting the output.
-        If "returns_output" is True, the function will return a generator
-        yielding the printed lines instead of the return values.
-
-        The decorator litterally hijack sys.stdout during each function
-        execution for ALL THE THREADS, so be careful with what you apply it to
-        and in which context.
-
-        >>> def numbers():
-            print "42"
-            print "1984"
-        ...
-        >>> numbers()
-        42
-        1984
-        >>> mute()(numbers)()
-        >>> list(mute(True)(numbers)())
-        ['42', '1984']
-
-        """
-        def decorator(func):
-
-            @wraps(func)
-            def wrapper(*args, **kwargs):
-
-                saved_stdout = sys.stdout
-                sys.stdout = StringIO.StringIO()
-
-                try:
-                    out = func(*args, **kwargs)
-                    if returns_output:
-                        out = sys.stdout.getvalue().strip().split()
-                finally:
-                    sys.stdout = saved_stdout
-
-                return out
 
     def run_ti(self, cubic_spline=False):
         r"""Runs Thermodynamic integration free energy estimate
@@ -358,6 +316,11 @@ class SimfileParser(object):
                 if gt != g_temp:
                     raise Exception("Generating temperature %s does not match the generating temperature provided in %s" %(gt, self.sim_files[0]))
                     sys.exit(-1)
+                if gt is not None and self.T != gt:
+                    print ("#temperature given with a commandline argument is:\t %f" %self.T)
+                    print ("#temperature in simfile is:\t\t\t\t %f" %gt)
+                    raise Exception("The temperatures do not match!")
+                    sys.exit(-1)
                 #if everything is ok record the generating lambda. 
                 g_lam_list.append(float(gl))
             #now we are convinced that the provided data files are sane, let's read the actual data
@@ -401,6 +364,7 @@ class SimfileParser(object):
                     else:
                         g_temp = float(l[-2])*kelvin
                     g_temp = g_temp.value()
+
 
             if '#Alchemical ' in l:
                 l = l.split()

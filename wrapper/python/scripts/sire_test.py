@@ -3,9 +3,10 @@ import os
 import sys
 
 import Sire.Config
+from Sire import try_import
 
 try:
-    import nose
+    nose = try_import("nose")
 except:
     print("Cannot import nose. Must install nose via sire.app/bin/install_package install nose")
     sys.exit(-1)
