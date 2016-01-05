@@ -12,6 +12,7 @@ from Sire import try_import_from
 from Sire.Units import *
 import os
 import sys
+import warnings
 
 np = try_import("numpy")
 MBAR = try_import_from("pymbar", "MBAR")
@@ -78,7 +79,7 @@ class FreeEnergies(object):
             self._f_k = MBAR_obj.f_k*self.T*k_boltz
         else:
             self._f_k = MBAR_obj.f_k
-            print ("#Warning!, Simulation temperature is None, all results are given in reduced units!")
+            warnings.warn("#Warning!, Simulation temperature is None, all results are given in reduced units!")
         (deltaF_ij, dDeltaF_ij, theta_ij) = MBAR_obj.getFreeEnergyDifferences()
         self._deltaF_mbar = deltaF_ij[0, self._lambda_array.shape[0]-1]
         self._dDeltaF_mbar = dDeltaF_ij[0, self._lambda_array.shape[0]-1]
@@ -158,24 +159,23 @@ class SubSample(object):
 
 
     def subsample_gradients(self):
-        if self.subsample == False:
+        if not self.subsample:
             print("# We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
             if self.percentage == 0:
-                RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
+                warnings.warn("You are not subsampling your data according to the statistical inefficiency nor are"
                                "you discarding initial data. Your are trying to remove 100% of the data. "
                                "Please set percentage to another value than 0!")
                 sys.exit(-1)
             percentage_removal = np.floor(self._N_k*(1-self.percentage/100.00))
             self._subsampled_N_k_gradients = self._N_k-percentage_removal
             N_max = np.max(self._subsampled_N_k_gradients)
-            print (N_max)
             self._subsampled_grad_kn = np.zeros(shape=(self._N_k.shape[0], N_max))
             for p in range(percentage_removal.shape[0]):
                 end = percentage_removal[p]+self._subsampled_grad_kn.shape[1]
                 self._subsampled_grad_kn[p,:] = self._gradients_kn[p,percentage_removal[p]:end]
-            if N_max <=100:
-                RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
+            if N_max < 100:
+                warnings.warn("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
         else:
             print("# We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
@@ -192,20 +192,20 @@ class SubSample(object):
                 indices_k.append(timeseries.subsampleCorrelatedData(self._gradients_kn[i,:], g=g))
                 self._subsampled_N_k_gradients[i]=len(indices_k[i])
             N_max = np.max(self._subsampled_N_k_gradients)
-            if N_max <=100:
-                RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
+            if N_max < 100:
+                warnings.warn("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
             self._subsampled_grad_kn = np.zeros([self._gradients_kn.shape[0], N_max], np.float64)
             for k in range(self._gradients_kn.shape[0]):
                 self._subsampled_grad_kn[k, :] = self._gradients_kn[k, indices_k[k]]
 
     def subsample_energies(self):
-        if self.subsample == False:
+        if not self.subsample:
             print("# We are only eliminating samples from the beginning of the data and are still working with highly"
                   " correlated data!")
 
             if self.percentage == 0:
-                RuntimeWarning("You are not subsampling your data according to the statistical inefficiency nor are"
+                warnings.warn("You are not subsampling your data according to the statistical inefficiency nor are"
                                "you discarding initial data. Your are trying to remove 100% of the data. "
                                "Please set percentage to another value than 0!")
                 sys.exit(-1)
@@ -216,8 +216,8 @@ class SubSample(object):
             for i in range(percentage_removal.shape[0]):
                 for j in range(percentage_removal.shape[0]):
                     self._subsampled_u_kln[i,j,:] = self._u_kln[i,j,percentage_removal[j]:]
-            if N_max <=100:
-                RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
+            if N_max < 100.0:
+                warnings.warn("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
         else:
             print("# We are doing a timeseries analysis using the timeseries analysis module in pymbar and will subsample"
@@ -236,8 +236,8 @@ class SubSample(object):
                 self._subsampled_N_k_energies[i]=len(indices_k[i])
             #self._subsampled_N_k_energies = (np.ceil(self._N_k / g)).astype(int)
             N_max = np.max(self._subsampled_N_k_energies)
-            if N_max <=100:
-                RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
+            if N_max < 100:
+                warnings.warn("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
             self._subsampled_u_kln = np.zeros([self._gradients_kn.shape[0],self._gradients_kn.shape[0], N_max], np.float64)
             for k in range(self._gradients_kn.shape[0]):
