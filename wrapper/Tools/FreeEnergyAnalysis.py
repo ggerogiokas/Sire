@@ -166,12 +166,14 @@ class SubSample(object):
                                "you discarding initial data. Your are trying to remove 100% of the data. "
                                "Please set percentage to another value than 0!")
                 sys.exit(-1)
-            percentage_removal = self._N_k*(1-self.percentage/100.0)
+            percentage_removal = np.floor(self._N_k*(1-self.percentage/100.00))
             self._subsampled_N_k_gradients = self._N_k-percentage_removal
             N_max = np.max(self._subsampled_N_k_gradients)
+            print (N_max)
             self._subsampled_grad_kn = np.zeros(shape=(self._N_k.shape[0], N_max))
             for p in range(percentage_removal.shape[0]):
-                self._subsampled_grad_kn[p,:] = self._gradients_kn[p,percentage_removal[p]:]
+                end = percentage_removal[p]+self._subsampled_grad_kn.shape[1]
+                self._subsampled_grad_kn[p,:] = self._gradients_kn[p,percentage_removal[p]:end]
             if N_max <=100:
                 RuntimeWarning("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
@@ -207,7 +209,7 @@ class SubSample(object):
                                "you discarding initial data. Your are trying to remove 100% of the data. "
                                "Please set percentage to another value than 0!")
                 sys.exit(-1)
-            percentage_removal = self._N_k*(1-self.percentage/100.0)
+            percentage_removal = np.floor(self._N_k*(1-self.percentage/100.0))
             self._subsampled_N_k_energies = self._N_k-percentage_removal
             N_max = np.max(self._subsampled_N_k_energies)
             self._subsampled_u_kln = np.zeros(shape=(self._N_k.shape[0], self._N_k.shape[0], N_max))
@@ -316,11 +318,12 @@ class SimfileParser(object):
                 if gt != g_temp:
                     raise Exception("Generating temperature %s does not match the generating temperature provided in %s" %(gt, self.sim_files[0]))
                     sys.exit(-1)
-                if gt is not None and self.T != gt:
-                    print ("#temperature given with a commandline argument is:\t %f" %self.T)
-                    print ("#temperature in simfile is:\t\t\t\t %f" %gt)
-                    raise Exception("The temperatures do not match!")
-                    sys.exit(-1)
+                if self.T is not None:
+                    if gt is not None and self.T != gt:
+                        print ("#temperature given with a commandline argument is:\t %f" %self.T)
+                        print ("#temperature in simfile is:\t\t\t\t %f" %gt)
+                        raise Exception("The temperatures do not match!")
+                        sys.exit(-1)
                 #if everything is ok record the generating lambda. 
                 g_lam_list.append(float(gl))
             #now we are convinced that the provided data files are sane, let's read the actual data
