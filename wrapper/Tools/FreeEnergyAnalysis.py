@@ -74,7 +74,11 @@ class FreeEnergies(object):
 
     def run_mbar(self):
         r"""Runs MBAR free energy estimate """
+        warnings.filterwarnings("ignore")
+        save_stdout = sys.stdout
+        sys.stdout = open('mbar.log', 'w')
         MBAR_obj = MBAR(self._u_kln, self._N_k, verbose=True)
+        sys.stdout = save_stdout
         if self.T is not None:
             self._f_k = MBAR_obj.f_k*self.T*k_boltz
         else:
@@ -136,7 +140,7 @@ class SubSample(object):
         string idenfier for subsampling method, default='timeseries' from timeseries module in MBAR
     """
 
-    def __init__(self, gradients_kn, energies, u_kln, N_k, percentage=100, subsample='timeseries'):
+    def __init__(self, gradients_kn, energies, u_kln, N_k, percentage=100, subsample=True):
         self._gradients_kn = gradients_kn
         self._N_k = N_k
         self._energies_kn = energies

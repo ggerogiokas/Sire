@@ -56,6 +56,7 @@ import Sire.Stream
 import argparse
 import sys
 import os
+import warnings
 from Sire.Units import *
 from Sire import try_import
 from Sire.Tools.FreeEnergyAnalysis import SubSample
@@ -268,7 +269,7 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
     ti = do_sire_TI(subsample_obj.gradients_kn, subsample_obj.N_k_gradients, parser.lam)
     mbar = None
     if parser.u_kln is not None:
-        free_energy_obj = FreeEnergies(u_kln = subsample_obj.u_kln, N_k =subsample_obj.N_k_energies, lambda_array = parser.lam, gradients_kn = subsample_obj.gradients_kn)
+        free_energy_obj = FreeEnergies(g_temp = parser.T, u_kln = subsample_obj.u_kln, N_k =subsample_obj.N_k_energies, lambda_array = parser.lam, gradients_kn = subsample_obj.gradients_kn)
         mbar = do_mbar(free_energy_obj)
         FILE.write("# PMFs MBAR\n")
         FILE.write("# Lambda  PMF  Maximum  Minimum \n")
@@ -545,7 +546,8 @@ if __name__ == '__main__':
     else:
         percent = 60.0
 
-    print (args.subsampling)
+    if args.subsampling:
+        print("# Subsampling done in conjunction with MBAR")
 
     if not input_file and not gradient_files and not sim_files and not lam_dirs:
         parser.print_help()
@@ -576,6 +578,8 @@ if __name__ == '__main__':
 
     #We have a bunch of simfiles that are used for an MBAR analysis, but also produce output for TI, and BAR
     if sim_files:
+        if args.range:
+            warnings.warn("Range argument is only supported for Sire Stream free energy files, e.g. freeenergy.s3")
         FILE.write("# Analysing free energies contained in file(s) \"%s\"\n" % sim_files)
         do_simfile_analysis(sim_files, FILE, percent, lam = args.lam, T = args.temperature, subsample = args.subsampling)
 
