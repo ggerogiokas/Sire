@@ -296,7 +296,7 @@ def do_simfile_analysis(input_file, FILE, percent=0, lam=None, T=None, subsample
                     p.y() + p.yError()))
     FILE.write("# Free energies \n")
     if mbar is not None:
-        if T is not None:
+        if parser.T is not None:
             FILE.write("# %s = %s +/- %s kcal mol-1\n" % ("MBAR", pmf[-1][1], error_mbar[-1]))
         else:
             print ('# If you want estimates in kcal mol-1 please provide a simulation temperature')

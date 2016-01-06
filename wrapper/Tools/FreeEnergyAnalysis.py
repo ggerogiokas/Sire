@@ -323,6 +323,14 @@ class SimfileParser(object):
                 if lam_array is None:
                     print(
                         "# It seems that no lambda array was given as input for the simulation, no MBAR analysis will be possible.")
+                if self.T is not None:
+                    if g_temp is not None and self.T != g_temp:
+                        print ("#temperature given with a commandline argument is:\t %f" % self.T)
+                        print ("#temperature in simfile is:\t\t\t\t %f" % g_temp)
+                        raise Exception("The temperatures do not match!")
+                        sys.exit(-1)
+                else:
+                    self.T = g_temp
                 g_lam_list.append(float(g_lam))
             else:
                 la, gl, gt = self.analyse_headers(content)
@@ -335,17 +343,11 @@ class SimfileParser(object):
                         raise Exception("Generating lambda %s is not part of the alchemical array provided in %s" % (
                             gl, self.sim_files[0]))
                         sys.exit(-1)
-                if gt != g_temp:
+                if gt != self.T:
                     raise Exception(
                         "Generating temperature %s does not match the generating temperature provided in %s" % (
                             gt, self.sim_files[0]))
                     sys.exit(-1)
-                if self.T is not None:
-                    if gt is not None and self.T != gt:
-                        print ("#temperature given with a commandline argument is:\t %f" % self.T)
-                        print ("#temperature in simfile is:\t\t\t\t %f" % gt)
-                        raise Exception("The temperatures do not match!")
-                        sys.exit(-1)
                 # if everything is ok record the generating lambda.
                 g_lam_list.append(float(gl))
             # now we are convinced that the provided data files are sane, let's read the actual data
@@ -377,6 +379,7 @@ class SimfileParser(object):
                 g_lam = float(l[-1])
             if '#Generating temperature' in l:
                 l = l.split()
+                print (l)
                 if l[-1] == 'SireUnits::Celsius':
                     g_temp = None
                 else:
@@ -388,6 +391,7 @@ class SimfileParser(object):
                     else:
                         g_temp = float(l[-2]) * kelvin
                     g_temp = g_temp.value()
+                print ('gtemp is %f' % g_temp)
 
             if '#Alchemical ' in l:
                 l = l.split()
