@@ -74,7 +74,7 @@ class FreeEnergies(object):
 
     def run_mbar(self):
         r"""Runs MBAR free energy estimate """
-        MBAR_obj = self.mute()(MBAR(self._u_kln, self._N_k, verbose=True))()
+        MBAR_obj = MBAR(self._u_kln, self._N_k, verbose=True)
         if self.T is not None:
             self._f_k = MBAR_obj.f_k*self.T*k_boltz
         else:
@@ -215,7 +215,8 @@ class SubSample(object):
             self._subsampled_u_kln = np.zeros(shape=(self._N_k.shape[0], self._N_k.shape[0], N_max))
             for i in range(percentage_removal.shape[0]):
                 for j in range(percentage_removal.shape[0]):
-                    self._subsampled_u_kln[i,j,:] = self._u_kln[i,j,percentage_removal[j]:]
+                    end = percentage_removal[j]+self._subsampled_u_kln.shape[2]
+                    self._subsampled_u_kln[i,j,:] = self._u_kln[i,j,percentage_removal[j]:end]
             if N_max < 100.0:
                 warnings.warn("You have reduced your data to less than 100 samples, the results from these might not "
                                "be trustworthy. ")
@@ -283,14 +284,14 @@ class SimfileParser(object):
         lam_array = None #lambda arrays from input files
         g_lam = None #Gnerating lambdas from all input files
         g_lam_list = []
-        #Lambda sanity checks
+        # Lambda sanity checks
         if self.lam is not None:
             if num_inputfiles != lam.shape[0]:
                 raise Exception("The lambda array you supplied does not have the same length as the number of input files")
                 sys.exit(-1)
-        #sanity checking for file existance
+        # sanity checking for file existance
         for i in range(num_inputfiles):
-            #check if filesize is not zero:
+            # check if filesize is not zero:
             if not os.path.exists(self.sim_files[i]):
                 raise IOError("supllied simulation file %s does not exist" %self.sim_files[i])
             if os.stat(self.sim_files[i]).st_size == 0:
@@ -324,9 +325,9 @@ class SimfileParser(object):
                         print ("#temperature in simfile is:\t\t\t\t %f" %gt)
                         raise Exception("The temperatures do not match!")
                         sys.exit(-1)
-                #if everything is ok record the generating lambda. 
+                # if everything is ok record the generating lambda.
                 g_lam_list.append(float(gl))
-            #now we are convinced that the provided data files are sane, let's read the actual data
+            # now we are convinced that the provided data files are sane, let's read the actual data
             print ("# Reading simulation file: %s" %self.sim_files[i])
             self._data.append(np.loadtxt(self.sim_files[i]))
             if lam_array is None:
@@ -334,9 +335,8 @@ class SimfileParser(object):
             else:
                 self.lam = lam_array
 
-
-        #loading data into arrays for further processing
-        #N_k is the number of samples at generating thermodynamic state (lambda) k
+        # loading data into arrays for further processing
+        # N_k is the number of samples at generating thermodynamic state (lambda) k
         self._N_k = np.zeros(self.lam.shape[0])
         for i in range(num_inputfiles):
             d = self._data[i]
@@ -398,7 +398,7 @@ class SimfileParser(object):
             self._u_kln = np.zeros(shape=(self.lam.shape[0], self.lam.shape[0], self._max_l))
             for i in range(len(self._data)):
                 d = self._data[i]
-                self._u_kln[i][:self._N_k[i]][:self._N_k[i]] = d[:,5:].transpose()
+                self._u_kln[i][:,:self._N_k[i]] = d[:,5:].transpose()
         else: 
             self._ukln = None
 

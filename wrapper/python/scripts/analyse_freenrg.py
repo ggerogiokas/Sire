@@ -279,7 +279,7 @@ def do_simfile_analysis(input_file, FILE, percent = 0, lam = None, T = None, sub
             FILE.write("%f  %f %f %f \n" % (pmf[i][0], pmf[i][1], pmf[i][1]+error_mbar[i], pmf[i][1]-error_mbar[i]))
         FILE.write("# Free energies MBAR \n")
         if T is not None:
-            FILE.write("# %s = %s +/- %s kcal mol-1\n" % ("MBAR", ti.deltaG(), ti.values()[-1].yMaxError()))
+            FILE.write("# %s = %s +/- %s kcal mol-1\n" % ("MBAR",  pmf[-1][1], error_mbar[-1]))
         else:
             print ('# If you want estimates in kcal mol-1 please provide a simulation temperature')
             FILE.write("# %s = %s +/- %s reduced units\n" % ("MBAR", pmf[-1][1], error_mbar[-1]))
