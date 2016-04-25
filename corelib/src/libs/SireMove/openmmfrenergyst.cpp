@@ -3298,7 +3298,8 @@ void OpenMMFrEnergyST::integrate(IntegratorWorkspace &workspace,
             exit(-1);
         }
         pot_energies.append(p_energy_lambda * OpenMM::KcalPerKJ);
-        
+        cout<<"Before updating SPonoff"<<p_energy_lambda<<endl;
+        cout<<"Before updating SPonoff"<<p_energy_lambda * OpenMM::KcalPerKJ<<endl;
         if (perturbed_energies[0])
         {
             openmm_context->setParameter("SPOnOff", 1.0); //Solvent-Solvent and Protein Protein Non Bonded OFF
@@ -3335,6 +3336,7 @@ void OpenMMFrEnergyST::integrate(IntegratorWorkspace &workspace,
 
         //Computing the potential energies and gradients
         p_energy_lambda = state_openmm.getPotentialEnergy();
+        cout<<"After updating context"<<p_energy_lambda<<endl;
 
 
         //Let's calculate the gradients
@@ -3435,7 +3437,6 @@ void OpenMMFrEnergyST::integrate(IntegratorWorkspace &workspace,
     //Now the box dimensions
     if (MCBarostat_flag == true)
     {
-
         updateBoxDimensions(state_openmm, buffered_dimensions, Debug, ws);
     }
     // Clear all buffers

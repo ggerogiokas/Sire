@@ -284,6 +284,7 @@ class SimfileParser(object):
         self.sim_files = sim_files
         self.lam = lam
         self.T = T
+        print (T)
         self._u_kln = None
         self._N_k = None
         self._grad_kn = None
@@ -343,8 +344,9 @@ class SimfileParser(object):
                         raise Exception("Generating lambda %s is not part of the alchemical array provided in %s" % (
                             gl, self.sim_files[0]))
                         sys.exit(-1)
-                if gt != self.T:
-                    raise Exception(
+                if gt is not None:
+                    if gt != self.T:
+                        raise Exception(
                         "Generating temperature %s does not match the generating temperature provided in %s" % (
                             gt, self.sim_files[0]))
                     sys.exit(-1)
@@ -391,7 +393,7 @@ class SimfileParser(object):
                     else:
                         g_temp = float(l[-2]) * kelvin
                     g_temp = g_temp.value()
-                print ('gtemp is %f' % g_temp)
+                #print ('gtemp is %f' % g_temp)
 
             if '#Alchemical ' in l:
                 l = l.split()
