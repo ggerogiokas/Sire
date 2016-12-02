@@ -57,9 +57,9 @@ def averageCoordinates(restr_dict):
     #restr_dict[idx]=([req,K,D],[coords])
     #Calculation of the mean coordinate for every atoms
     counter = 0
-    x_avg = 0
-    y_avg = 0
-    z_avg = 0
+    x_avg = 0.0
+    y_avg = 0.0
+    z_avg = 0.0
     for pairs in restr_dict:
         coords = restr_dict[pairs][1:] #here the list of all the coords
         for val in coords:
@@ -73,9 +73,14 @@ def averageCoordinates(restr_dict):
                 x_avg = x_avg + (val[0] - x_avg)/counter
                 y_avg = y_avg + (val[1] - y_avg)/counter
                 z_avg = z_avg + (val[2] - z_avg)/counter
+                counter+=1
 
-        #Substitution of values
-        restr_dict[pairs][1:]=[[x_avg,y_avg,z_avg]]
+        #Substitution of values and reset of all the values
+        restr_dict[pairs][1:]=[[x_avg*10,y_avg*10,z_avg*10]]
+        counter=0
+        x_avg = 0.0
+        y_avg = 0.0
+        z_avg = 0.0
 
     return restr_dict
 
@@ -128,6 +133,7 @@ def defineIntegrationDomain(restr_dict):
     min_z -= buff.val
     #Adding a buffer region
     space = [(min_x,min_y, min_z), (max_x,max_y,max_z)]
+    print(space)
     return space
 
 
@@ -213,6 +219,8 @@ def run():
     while (current_frame <= end_frame):
         #now for each lig:host pairs append the host coordinates
         for pairs in restr_dict:
+            #the host index is always greater than the guest index
+            #thus we take the max value
             host_idx = max(pairs)
             restr_dict[pairs].append(aligned_traj.xyz[current_frame,host_idx,:].tolist())
 
@@ -233,6 +241,7 @@ def run():
     Nx = int ( round ( ( space[1][0] - space[0][0] ) / delta ) )
     Ny = int ( round ( ( space[1][0] - space[0][0] ) / delta ) )
     Nz = int ( round ( ( space[1][0] - space[0][0] ) / delta ) )
+
     #Constants
     print("Number of elements to be evaluated %d" %(Nx*Ny*Nz))
     print("Evaluation...")
@@ -252,30 +261,30 @@ def run():
 
                     distance = ((x-x_dict)**2 + (y-y_dict)**2 + (z-z_dict)**2)
 
-                    upper_bound = restr_dict[pairs][0][1]+ restr_dict[pairs][0][2]
-                    intmd_bound = restr_dict[pairs][0][1]
-                    lower_bound = restr_dict[pairs][0][1]- restr_dict[pairs][0][2]
+                    upper_bound = (restr_dict[pairs][0][0]+ restr_dict[pairs][0][2])**2
+                    intmd_bound = (restr_dict[pairs][0][0])**2
+                    lower_bound = max(0,(restr_dict[pairs][0][0]- restr_dict[pairs][0][2])**2)
 
-                    if distance < upper_bound and distance > intmd_bound:
+
+                    if distance <= upper_bound and distance >= intmd_bound:
                         if counter == len(restr_dict)-1:
                             U = 0.0
                         else:
                             counter+=1
 
-                    elif distance < intmd_bound and distance > lower_bound:
+                    elif distance <= intmd_bound and distance >= lower_bound:
                         if counter== len(restr_dict)-1:
                             U = 0.0
                         else:
                             counter+=1
                     else:
 
-                        dist = (math.sqrt(distance))
+                        dist = (math.sqrt(x**2 + y**2 + z**2))
                         K = (restr_dict[pairs][0][1])
                         D = (restr_dict[pairs][0][2])
-                        U =(K*(dist-D)**2)
-
-
+                        U = (K*(dist-D)**2)
                         break
+
 
                 Boltz = math.exp(-beta*U)*deltavol
                 Ztrans += (Boltz)
